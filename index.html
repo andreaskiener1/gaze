@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Blickverfolgung mit gaze-detection</title>
+  <script type="module">
+    import gaze from 'https://cdn.skypack.dev/gaze-detection';
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await gaze.loadModel();
+
+      const video = document.getElementById('video');
+      await gaze.setUpCamera(video);
+      video.play();
+
+      let leftTime = 0, rightTime = 0;
+      let lastTimestamp = performance.now();
+      let tracking = true;
+
+      const gazeDot = document.getElementById('gazeDot');
+
+      async function predictLoop() {
+        const prediction = await gaze.getGazePrediction();
+        const now = performance.now();
+
+        if (prediction) {
+          // Punktposition grob bestimmen (zentriert links/rechts)
+          const vw = window.innerWidth;
+          const x = (prediction === 'LEFT' ? vw * 0.25
+                   : prediction === 'RIGHT' ? vw * 0.75
+                   : vw * 0.5);
+          const y = window.innerHeight * 0.5;
+
+          gazeDot.style.left = x + 'px';
+          gazeDot.style.top = y + 'px';
+          gazeDot.style.display = 'block';
+
+          if (tracking) {
+            const dt = now - lastTimestamp;
+            if (prediction === 'LEFT') leftTime += dt;
+            else if (prediction === 'RIGHT') rightTime += dt;
+          }
+        }
+        lastTimestamp = now;
+        requestAnimationFrame(predictLoop);
+      }
+      predictLoop();
+
+      window.submitAnswer = (ans) => {
+        tracking = false;
+        gazeDot.style.display = 'none';
+        document.getElementById('result').innerHTML = `
+          <p><strong>Antwort:</strong> ${ans === 'left' ? 'Links = KI' : 'Rechts = KI'}</p>
+          <p>Blickzeit links: ${(leftTime/1000).toFixed(2)} s</p>
+          <p>Blickzeit rechts: ${(rightTime/1000).toFixed(2)} s</p>
+        `;
+      };
+    });
+  </script>
+  <style>
+    body { margin:0; font-family:sans-serif; text-align:center; overflow:hidden; }
+    .container { display:flex; height:80vh; }
+    .half { width:50%; }
+    img { width:100%; height:100%; object-fit:cover; }
+    .buttons { margin:20px; }
+    #gazeDot { position:fixed; width:15px; height:15px;
+      background:red; border-radius:50%; pointer-events:none;
+      z-index:1000; transform:translate(-50%,-50%);
+      display:none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Ist das Bild KI-generiert oder echt? (mit gaze‑detection)</h1>
+  <div class="container">
+    <div class="half"><img src="https://picsum.photos/id/1025/800/600"></div>
+    <div class="half"><img src="https://images.generated.photos/..."></div>
+  </div>
+  <div class="buttons">
+    <button onclick="submitAnswer('left')">Links: KI</button>
+    <button onclick="submitAnswer('right')">Rechts: KI</button>
+  </div>
+  <div id="result"></div>
+  <video id="video" style="display:none;"></video>
+  <div id="gazeDot"></div>
+</body>
+</html>
